@@ -18,6 +18,7 @@ class ChatScreenController extends GetxController {
   double scrollOffsetPercent = -1;
 
   final testMdBlocks = <Block>[].obs;
+  final testMdBlocksLen = 0.obs;
 
   final testStreamMd = ''.obs;
 
@@ -25,9 +26,14 @@ class ChatScreenController extends GetxController {
   void onInit() {
     super.onInit();
 
-    markdownToBlocksAsync(testMd).then((List<Block> v) {
-      testMdBlocks.value = List<List<Block>>.generate(100, (_) => v).expand((e) => e).toList();
-      print(v);
+    // print(DateTime.now());
+    // markdownToBlocksAsync(testMd).then((List<Block> v) {
+    //   testMdBlocks.value = List<List<Block>>.generate(100, (_) => v).expand((e) => e).toList();
+    //   print(DateTime.now());
+    // });
+
+    ever(testMdBlocks, (val) {
+      testMdBlocksLen.value = testMdBlocks.length;
     });
 
     drawerController = InteractiveDrawerController(

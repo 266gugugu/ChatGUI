@@ -98,13 +98,13 @@ class ChatScreen extends GetView<ChatScreenController> {
                             duration: const Duration(milliseconds: 180),
                             decoration: BoxDecoration(
                               border: Border(
-                                top: BorderSide(
+                                bottom: BorderSide(
                                   color: C.g2.r.withAlpha(
                                     percent < 1 && percent != -1 ? 160 : 0,
                                   ),
                                   width: 1,
                                 ),
-                                bottom: BorderSide(
+                                top: BorderSide(
                                   color: C.g2.r.withAlpha(
                                     percent > 0 && percent != -1 ? 160 : 0,
                                   ),

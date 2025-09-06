@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:md_single_block_renderer/md_single_block_renderer.dart';
 
 class ChatInput extends GetView<ChatScreenController> {
   const ChatInput({super.key});
@@ -62,27 +63,44 @@ class ChatInput extends GetView<ChatScreenController> {
                           bottom: 5,
                           right: 5,
                           child: IconButton(
-                            onPressed: () {
-                              // controller.testStreamMd.value = '';
-                              // Timer.periodic(
-                              //   const Duration(milliseconds: 16, microseconds: 667),
-                              //   (timer) {
-                              //     final progress =
-                              //         controller.testStreamMd.value.length /
-                              //         testMd.length;
-                              //     if (progress >= 1) {
-                              //       timer.cancel();
-                              //       return;
-                              //     }
-                              //     controller.testStreamMd.value = testMd.substring(
-                              //       0,
-                              //       min(
-                              //         (progress * testMd.length + 8).toInt(),
-                              //         testMd.length,
-                              //       ),
-                              //     );
-                              //   },
-                              // );
+                            onPressed: () async {
+                              controller.testStreamMd.value = '';
+                              Future<bool> next() async {
+                                final progress =
+                                    controller.testStreamMd.value.length / testMd.length;
+                                if (progress >= 1) {
+                                  return true;
+                                }
+                                controller.testStreamMd.value = testMd.substring(
+                                  0,
+                                  min(
+                                    (progress * testMd.length + 18).toInt(),
+                                    testMd.length,
+                                  ),
+                                );
+                                final oldBlocks = controller.testMdBlocks.value;
+
+                                controller
+                                    .testMdBlocks
+                                    .value = await markdownToBlocksAsync(
+                                  controller.testStreamMd.value,
+                                );
+
+                                print(controller.testMdBlocks.value);
+                                return false;
+                              }
+
+                              while (true) {
+                                final res = await Future.wait([
+                                  next(),
+                                  Future.delayed(
+                                    Duration(milliseconds: (1.0 / 60.0 * 1000).round()),
+                                  ),
+                                ]);
+                                if (res[0]) {
+                                  break;
+                                }
+                              }
                             },
                             icon: const Icon(LucideIcons.arrowUp),
                             padding: EdgeInsets.all(4),

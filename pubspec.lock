@@ -280,11 +280,9 @@ packages:
   md_single_block_renderer:
     dependency: "direct main"
     description:
-      path: "."
-      ref: HEAD
-      resolved-ref: aaab5a7ca1cc5c02767cace2962c513d246530f3
-      url: "https://github.com/EnderWolf006/md_single_block_renderer.git"
-    source: git
+      path: "/Users/doge/Documents/APP/md_single_block_renderer"
+      relative: false
+    source: path
     version: "0.0.1"
   meta:
     dependency: transitive

@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:chat_gui/pages/chat/controller.dart';
 import 'package:chat_gui/store/app_store.dart';
+import 'package:chat_gui/utils/api_service.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -9,6 +10,70 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ChatDrawer extends GetView<ChatScreenController> {
   const ChatDrawer({super.key});
+  
+  // 历史记录展开状态
+  final RxBool _isHistoryExpanded = true.obs;
+
+  void _showApiSettingsDialog(BuildContext context) {
+    final apiService = Get.find<ApiService>();
+    final apiUrlController = TextEditingController(text: apiService.apiUrl.value);
+    final apiKeyController = TextEditingController(text: apiService.apiKey.value);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('API设置'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: apiUrlController,
+                decoration: InputDecoration(
+                  labelText: 'API地址',
+                  hintText: 'https://api.example.com/v1/chat/completions',
+                ),
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: apiKeyController,
+                decoration: InputDecoration(
+                  labelText: 'API Key',
+                  hintText: 'sk-...',
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('取消'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final success = await apiService.saveConfig(
+                apiUrlController.text.trim(),
+                apiKeyController.text.trim(),
+              );
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('API配置已保存')),
+                );
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('保存失败，请重试')),
+                );
+              }
+            },
+            child: Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +147,12 @@ class ChatDrawer extends GetView<ChatScreenController> {
                           padding: EdgeInsets.all(9),
                           icon: const Icon(LucideIcons.squarePen),
                         ),
+                        IconButton(
+                          onPressed: () => _showApiSettingsDialog(context),
+                          padding: EdgeInsets.all(9),
+                          icon: const Icon(LucideIcons.settings),
+                          tooltip: 'API设置',
+                        ),
                       ],
                     ),
                   ),
@@ -122,15 +193,51 @@ class ChatDrawer extends GetView<ChatScreenController> {
                           minTileHeight: 48,
                         ),
                         const SizedBox(height: 8),
-                        for (var i = 0; i < 145; i++)
-                          ListTile(
-                            title: Text(
-                              'History Title $i',
-                              style: TextStyle(color: colorScheme.onSurface),
-                            ),
-                            onTap: () {},
-                            minTileHeight: 48,
+                        // 历史记录标题和展开/收缩按钮
+                        Obx(() => ListTile(
+                          title: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '历史记录',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  _isHistoryExpanded.value = !_isHistoryExpanded.value;
+                                },
+                                icon: Icon(
+                                  _isHistoryExpanded.value ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                                  size: 16,
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints(),
+                              ),
+                            ],
                           ),
+                          onTap: () {
+                            _isHistoryExpanded.value = !_isHistoryExpanded.value;
+                          },
+                          minTileHeight: 48,
+                        )),
+                        // 根据展开状态显示历史记录
+                        Obx(() => Column(
+                          children: [
+                            if (_isHistoryExpanded.value)
+                              for (var i = 0; i < 10; i++) // 限制显示最近10条记录
+                                ListTile(
+                                  title: Text(
+                                    'History Title $i',
+                                    style: TextStyle(color: colorScheme.onSurface),
+                                  ),
+                                  onTap: () {},
+                                  minTileHeight: 48,
+                                ),
+                          ],
+                        )),
                         const SizedBox(height: 80),
                       ],
                     ),

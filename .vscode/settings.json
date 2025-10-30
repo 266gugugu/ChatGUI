@@ -6,4 +6,5 @@
   "i18n-ally.sourceLanguage": "en_US",
   "i18n-ally.displayLanguage": "zh_CN",
   "i18n-ally.pathMatcher": "{locale}.json",
+  "cmake.sourceDirectory": "C:/Users/PC/Desktop/dart/ChatGUI/windows",
 }

@@ -1,15 +1,10 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:math';
-import 'package:markdown/markdown.dart' as md;
-import 'package:chat_gui/pages/chat/components/content.dart';
 import 'package:chat_gui/pages/chat/controller.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:md_single_block_renderer/md_single_block_renderer.dart';
+import 'package:chat_gui/utils/api_service.dart';
 
 class ChatInput extends GetView<ChatScreenController> {
   const ChatInput({super.key});
@@ -37,11 +32,34 @@ class ChatInput extends GetView<ChatScreenController> {
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // 上下文开关
+                  Obx(() {
+                    final enabled = ApiService.to.useContext.value;
+                    return Tooltip(
+                      message: enabled ? '上下文已开启' : '上下文已关闭',
+                      child: IconButton(
+                        onPressed: () => ApiService.to.useContext.toggle(),
+                        icon: Icon(LucideIcons.link2),
+                        style: IconButton.styleFrom(
+                          backgroundColor: enabled
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.surfaceVariant,
+                          foregroundColor: enabled
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: EdgeInsets.all(9),
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Stack(
                       children: [
                         TextField(
                           controller: controller.inputController,
+                          focusNode: controller.inputFocusNode,
                           maxLines: 8,
                           minLines: 1,
                           style: TextStyle(
@@ -58,50 +76,21 @@ class ChatInput extends GetView<ChatScreenController> {
                               bottom: 9,
                             ),
                           ),
+                          // 处理Enter键发送消息
+                          onSubmitted: (_) => controller.onSendMessage(),
+                          // 添加键盘监听器，支持Enter发送消息，Shift+Enter换行
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.send,
+                          onTapOutside: (event) {
+                            // 点击外部时关闭键盘
+                            FocusManager.instance.primaryFocus?.unfocus();
+                          },
                         ),
                         Positioned(
                           bottom: 5,
                           right: 5,
                           child: IconButton(
-                            onPressed: () async {
-                              controller.testStreamMd.value = '';
-                              Future<bool> next() async {
-                                final progress =
-                                    controller.testStreamMd.value.length / testMd.length;
-                                if (progress >= 1) {
-                                  return true;
-                                }
-                                controller.testStreamMd.value = testMd.substring(
-                                  0,
-                                  min(
-                                    (progress * testMd.length + 18).toInt(),
-                                    testMd.length,
-                                  ),
-                                );
-                                final oldBlocks = controller.testMdBlocks.value;
-
-                                controller
-                                    .testMdBlocks
-                                    .value = await markdownToBlocksAsync(
-                                  controller.testStreamMd.value,
-                                );
-
-                                print(controller.testMdBlocks.value);
-                                return false;
-                              }
-
-                              while (true) {
-                                final res = await Future.wait([
-                                  next(),
-                                  Future.delayed(
-                                    Duration(milliseconds: (1.0 / 60.0 * 1000).round()),
-                                  ),
-                                ]);
-                                if (res[0]) {
-                                  break;
-                                }
-                              }
-                            },
+                            onPressed: controller.onSendMessage,
                             icon: const Icon(LucideIcons.arrowUp),
                             padding: EdgeInsets.all(4),
                             constraints: BoxConstraints(),
@@ -110,6 +99,7 @@ class ChatInput extends GetView<ChatScreenController> {
                               foregroundColor: Theme.of(context).colorScheme.onPrimary,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
+                            tooltip: '发送消息',
                           ),
                         ),
                       ],
@@ -186,6 +176,13 @@ void _openLargeInput(BoxConstraints constraints) {
                   focusColor: Colors.transparent,
                   border: InputBorder.none,
                 ),
+                // 全屏模式也支持Enter发送消息
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) {
+                  Navigator.of(ctx).pop();
+                  Get.find<ChatScreenController>().onSendMessage();
+                },
               ),
             ),
             SizedBox(width: 8),
@@ -199,12 +196,16 @@ void _openLargeInput(BoxConstraints constraints) {
                 ),
                 Expanded(child: SizedBox()),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Get.find<ChatScreenController>().onSendMessage();
+                  },
                   icon: Icon(LucideIcons.arrowUp),
                   style: IconButton.styleFrom(
                     backgroundColor: Theme.of(Get.context!).colorScheme.primary,
                     foregroundColor: Theme.of(Get.context!).colorScheme.onPrimary,
                   ),
+                  tooltip: '发送消息',
                 ),
               ],
             ),

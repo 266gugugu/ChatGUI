@@ -5,6 +5,7 @@ import 'data_manager.dart';
 
 // Explicitly import latin1 from dart:convert for character decoding
 import 'dart:convert' show latin1;
+import 'package:mime/mime.dart';
 
 // 全局 HttpClient：复用连接、设置连接上限与超时
 final HttpClient _httpClient = (() {
@@ -32,6 +33,8 @@ void main() async {
   print('API端点:');
   print('  GET    /health');
   print('  GET    /test-chinese');
+  print('  POST   /upload?type={image|video|file}');
+  print('  GET    /uploads/{filename}');
   print('  GET    /debug-upstream?userId={userId}');
   print('  GET    /config?userId={userId}');
   print('  POST   /config');
@@ -90,6 +93,10 @@ void handleRequest(HttpRequest request) async {
       print('中文测试响应已发送');
     } else if (path == '/debug-upstream' && request.method == 'GET') {
       await handleDebugUpstream(request);
+    } else if (path == '/upload' && request.method == 'POST') {
+      await handleUpload(request);
+    } else if (path.startsWith('/uploads/') && request.method == 'GET') {
+      await handleServeUpload(request);
     } else if (path == '/config' && request.method == 'GET') {
       await handleGetConfig(request, userId);
     } else if (path == '/config' && request.method == 'POST') {
@@ -293,15 +300,42 @@ Future<void> handleChat(HttpRequest request) async {
         
         // 根据use_context决定是否携带历史
         final bool useContext = data['use_context'] as bool? ?? false;
+        print('[Chat] use_context flag: ' + useContext.toString());
         List<Map<String, dynamic>> messages;
         if (useContext) {
           final history = await DataManager().getHistory(userId);
-          messages = history.map((msg) => {
-            'role': msg['role'],
-            'content': msg['content']
-          }).toList();
-          // 追加本次用户消息（防御：历史保存与请求可能不同步）
+          // 仅携带“上一条用户发言”，不带助手回复，再加当前用户消息
+          Map<String, dynamic>? lastUser;
+          for (int i = history.length - 1; i >= 0 && lastUser == null; i--) {
+            final h = history[i];
+            if (h['role'] == 'user') lastUser = h;
+          }
+          messages = [];
+          if (lastUser != null && (lastUser['content'] ?? '') != message) {
+            messages.add({'role': 'user', 'content': lastUser['content']});
+          }
           messages.add({'role': 'user', 'content': message});
+
+          // 简易“上一句是什么”本地回答：避免上游不支持对话记忆
+          final normalized = message.replaceAll('？', '?').replaceAll('。', '.').trim();
+          final askPrevPatterns = [
+            '我上一句说了什么',
+            '上一句说了什么',
+            '上一句是什么',
+            '你记得我上一句',
+            '上一句内容',
+            '上一句',
+          ];
+          if (askPrevPatterns.any((p) => normalized.contains(p)) && lastUser != null) {
+            final prev = (lastUser['content'] ?? '').toString();
+            final reply = '你上一句说的是："$prev"';
+            await DataManager().addChat(userId, 'assistant', reply);
+            request.response.statusCode = HttpStatus.ok;
+            request.response.headers.contentType = ContentType('application', 'json', charset: 'utf-8');
+            request.response.write(jsonEncode({'content': reply, 'debug': {'use_context': true, 'messages_count': messages.length, 'local_answer': true}}));
+            await request.response.close();
+            return;
+          }
         } else {
           messages = [
             {
@@ -310,6 +344,7 @@ Future<void> handleChat(HttpRequest request) async {
             }
           ];
         }
+        print('[Chat] messages count to upstream: ' + messages.length.toString());
 
         final payload = {
           'model': 'gemini-2.5-flash',
@@ -376,7 +411,7 @@ Future<void> handleChat(HttpRequest request) async {
           // 返回响应
           request.response.statusCode = HttpStatus.ok;
           request.response.headers.contentType = ContentType.json;
-          request.response.write(jsonEncode({'content': aiReply}));
+          request.response.write(jsonEncode({'content': aiReply, 'debug': {'use_context': useContext, 'messages_count': messages.length}}));
           
           print('AI回复: $aiReply');
         } catch (e) {
@@ -589,6 +624,110 @@ Future<void> handleDebugUpstream(HttpRequest request) async {
     request.response.headers.contentType = ContentType.json;
     request.response.write(jsonEncode({'error': e.toString()}));
   } finally {
+    await request.response.close();
+  }
+}
+
+// 处理上传 (multipart/form-data)，保存到 backend/uploads，并返回文件信息
+Future<void> handleUpload(HttpRequest request) async {
+  try {
+    final type = request.uri.queryParameters['type'] ?? 'file';
+    final contentType = request.headers.contentType;
+    if (contentType == null || contentType.mimeType != 'multipart/form-data') {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({'error': 'Content-Type 必须是 multipart/form-data'}));
+      await request.response.close();
+      return;
+    }
+    final boundary = contentType.parameters['boundary'];
+    if (boundary == null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({'error': '缺少 boundary'}));
+      await request.response.close();
+      return;
+    }
+
+    final uploadDir = Directory('uploads');
+    if (!await uploadDir.exists()) {
+      await uploadDir.create(recursive: true);
+    }
+
+    String? savedName;
+    int savedSize = 0;
+
+    final transformer = MimeMultipartTransformer(boundary);
+    await for (final part in request.cast<List<int>>().transform(transformer)) {
+      final headers = part.headers; // e.g. content-disposition
+      final disp = headers['content-disposition'];
+      if (disp == null) continue;
+      final filenameMatch = RegExp(r'filename="([^\"]*)"').firstMatch(disp);
+      if (filenameMatch == null) continue;
+      final original = filenameMatch.group(1) ?? 'file';
+      // 记录文件
+      final name = '${DateTime.now().millisecondsSinceEpoch}_${original.replaceAll(' ', '_')}';
+      final file = File('uploads/$name');
+      final sink = file.openWrite();
+      await part.pipe(sink);
+      await sink.close();
+      savedName = name;
+      savedSize = await file.length();
+    }
+
+    if (savedName == null) {
+      request.response.statusCode = HttpStatus.badRequest;
+      request.response.headers.contentType = ContentType.json;
+      request.response.write(jsonEncode({'error': '未接收到文件'}));
+      await request.response.close();
+      return;
+    }
+
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({
+      'name': savedName,
+      'size': savedSize,
+      'type': type,
+      'url': '/uploads/$savedName'
+    }));
+  } catch (e) {
+    print('上传失败: $e');
+    request.response.statusCode = HttpStatus.internalServerError;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write(jsonEncode({'error': '上传失败: $e'}));
+  } finally {
+    await request.response.close();
+  }
+}
+
+// 静态文件服务: /uploads/{filename}
+Future<void> handleServeUpload(HttpRequest request) async {
+  try {
+    final path = request.uri.path; // /uploads/xxx
+    final name = path.replaceFirst('/uploads/', '');
+    final file = File('uploads/$name');
+    if (!await file.exists()) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.write('Not Found');
+      await request.response.close();
+      return;
+    }
+    final ext = name.split('.').last.toLowerCase();
+    ContentType ct;
+    if (['png','jpg','jpeg','gif','webp'].contains(ext)) {
+      ct = ContentType('image', ext == 'jpg' ? 'jpeg' : ext);
+    } else if (['mp4','webm','mov'].contains(ext)) {
+      ct = ContentType('video', ext);
+    } else {
+      ct = ContentType.binary;
+    }
+    request.response.headers.contentType = ct;
+    await file.openRead().pipe(request.response);
+  } catch (e) {
+    print('静态文件服务失败: $e');
+    request.response.statusCode = HttpStatus.internalServerError;
+    request.response.write('Error');
     await request.response.close();
   }
 }

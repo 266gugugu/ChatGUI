@@ -2,9 +2,7 @@ import 'package:chat_gui/pages/chat/controller.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:markdown/markdown.dart' as md;
 import 'package:scroll_to_index/scroll_to_index.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 class _TypingIndicator extends StatefulWidget {
   final int delay;
@@ -134,12 +132,24 @@ class ChatContent extends GetView<ChatScreenController> {
                     final message = controller.messages[index];
                     final isUser = message.role == 'user';
                     print('渲染消息 $index: 角色=$isUser, 内容="${message.text}"');
+                    final displayText = _sanitizeText(message.text);
                     
                     return AutoScrollTag(
                       key: ValueKey(index),
                       controller: controller.scrollController,
                       index: index,
-                      child: Align(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        transitionBuilder: (child, anim) {
+                          return SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.05),
+                              end: Offset.zero,
+                            ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+                            child: FadeTransition(opacity: anim, child: child),
+                          );
+                        },
+                        child: Align(
                         alignment: isUser ? Alignment.topRight : Alignment.topLeft,
                         child: ConstrainedBox(
                           constraints:
@@ -169,9 +179,9 @@ class ChatContent extends GetView<ChatScreenController> {
                               crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                               children: [
                                 SelectableText.rich(
-                                  TextSpan(
-                                    text: message.text,
-                                    style: TextStyle(
+                                  _buildRichSpan(
+                                    displayText,
+                                    TextStyle(
                                       color: isUser ? Colors.white : colorScheme.onSurface,
                                       fontSize: 16,
                                       height: 1.5,
@@ -190,6 +200,7 @@ class ChatContent extends GetView<ChatScreenController> {
                             ),
                           ),
                         ),
+                      ),
                       ),
                     );
                   },
@@ -219,6 +230,40 @@ class ChatContent extends GetView<ChatScreenController> {
       return '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')}';
     }
   }
+}
+
+// 将 markdown 风格的列表星号、加粗星号去除/替换为更友好的展示
+String _sanitizeText(String raw) {
+  if (raw.isEmpty) return raw;
+  final lines = raw.split('\n');
+  final bullet = RegExp(r'^\s*[\*\-]\s+');
+  final cleaned = lines.map((l) {
+    var s = l;
+    if (bullet.hasMatch(s)) {
+      s = s.replaceFirst(bullet, '• ');
+    }
+    return s;
+  }).join('\n');
+  return cleaned;
+}
+
+// 将 **文本** 渲染为加粗，支持多段；不跨行匹配
+TextSpan _buildRichSpan(String text, TextStyle baseStyle) {
+  final spans = <TextSpan>[];
+  final reg = RegExp(r'\*\*(.+?)\*\*');
+  int index = 0;
+  for (final m in reg.allMatches(text)) {
+    if (m.start > index) {
+      spans.add(TextSpan(text: text.substring(index, m.start), style: baseStyle));
+    }
+    final boldText = m.group(1) ?? '';
+    spans.add(TextSpan(text: boldText, style: baseStyle.copyWith(fontWeight: FontWeight.w600)));
+    index = m.end;
+  }
+  if (index < text.length) {
+    spans.add(TextSpan(text: text.substring(index), style: baseStyle));
+  }
+  return TextSpan(children: spans, style: baseStyle);
 }
 
 class ChatContentUserBubble extends GetView<ChatScreenController> {

@@ -56,6 +56,24 @@ class ApiService extends GetxService {
   // 是否携带上下文（聊天历史）
   final RxBool useContext = false.obs;
 
+  // 上传文件（file/image/video），返回后端生成的url
+  Future<Map<String, dynamic>?> uploadFile({required String type, required String path}) async {
+    try {
+      final uri = Uri.parse('$currentBaseUrl/upload?type=$type');
+      final req = http.MultipartRequest('POST', uri);
+      req.files.add(await http.MultipartFile.fromPath('file', path));
+      final resp = await req.send();
+      if (resp.statusCode == 200) {
+        final body = await resp.stream.bytesToString();
+        return Map<String, dynamic>.from(jsonDecode(body));
+      }
+      return null;
+    } catch (e) {
+      print('上传失败: $e');
+      return null;
+    }
+  }
+
   @override
   void onInit() {
     super.onInit();

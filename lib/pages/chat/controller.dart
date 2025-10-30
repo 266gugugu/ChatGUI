@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:chat_gui/components/interactive_drawer.dart';
-import 'package:chat_gui/pages/chat/components/content.dart';
 import 'package:chat_gui/store/app_store.dart';
-import 'dart:async';
 import 'package:chat_gui/utils/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -31,6 +29,7 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
   final messageInputHeight = 100.0.obs;
   final isDrawerOpen = false.obs;
   final List<Message> messages = [];
+  final RxList<ChatSession> sessions = <ChatSession>[].obs; // 按时间自动分组的历史会话
   final double kChatInputMaxHeight = 200.0;
   final ApiService apiService = Get.find<ApiService>();
 
@@ -86,86 +85,103 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
       update(['scrollBorder']);
     });
 
-    // 加载测试数据
-    _loadTestData();
+    // 初始加载历史
+    _loadInitial();
   }
 
-  void _loadTestData() {
-    // 添加一些测试消息
-    messages.add(Message(
-      text: '你好！我是AI助手。有什么可以帮助你的吗？',
-      role: 'assistant',
-      timestamp: DateTime.now(),
-    ));
-    messages.add(Message(
-      text: '请帮我写一个Flutter的Hello World程序',
-      role: 'user',
-      timestamp: DateTime.now(),
-    ));
-    messages.add(Message(
-      text: '''# Flutter Hello World 程序
-
-下面是一个基本的 Flutter Hello World 程序：
-
-```dart
-import 'package:flutter/material.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
+  Future<void> _loadInitial() async {
+    await refreshSessions();
+    if (sessions.isNotEmpty) {
+      // 默认展示最近一段会话
+      messages
+        ..clear()
+        ..addAll(sessions.last.messages);
+      update();
+      await Future.microtask(() {});
+      scrollToEnd();
+    }
   }
-}
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  Future<void> refreshSessions() async {
+    try {
+      final raw = await apiService.getChatHistory();
+      final all = raw
+          .map((e) => Message(
+                text: (e['content'] ?? '').toString(),
+                role: (e['role'] ?? 'assistant').toString(),
+                timestamp: DateTime.tryParse((e['timestamp'] ?? '').toString()) ?? DateTime.now(),
+              ))
+          .toList();
 
-  final String title;
+      // 根据时间间隔分段（>30分钟算新会话）
+      const gap = Duration(minutes: 30);
+      final List<ChatSession> grouped = [];
+      List<Message> current = [];
+      for (final m in all) {
+        if (current.isEmpty) {
+          current = [m];
+        } else {
+          final last = current.last;
+          if (m.timestamp.difference(last.timestamp).abs() > gap) {
+            grouped.add(_sessionFrom(current));
+            current = [m];
+          } else {
+            current.add(m);
+          }
+        }
+      }
+      if (current.isNotEmpty) grouped.add(_sessionFrom(current));
 
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'Hello World!',
-              style: TextStyle(fontSize: 24),
-            ),
-          ],
-        ),
-      ),
-    );
+      sessions.assignAll(grouped);
+    } catch (e) {
+      print('加载历史失败: $e');
+    }
   }
-}
-```
 
-这个程序创建了一个简单的Flutter应用，显示一个居中的"Hello World!"文本。''',
-      role: 'assistant',
-      timestamp: DateTime.now(),
-    ));
+  ChatSession _sessionFrom(List<Message> items) {
+    // 标题：优先第一条用户消息的首句；否则第一条消息；都没有则“新对话 + 日期”
+    String title = '';
+    for (final m in items) {
+      if (m.role == 'user' && m.text.trim().isNotEmpty) {
+        title = _firstSentence(m.text.trim());
+        break;
+      }
+    }
+    if (title.isEmpty && items.isNotEmpty) title = _firstSentence(items.first.text.trim());
+    if (title.isEmpty) {
+      final ts = items.isNotEmpty ? items.first.timestamp : DateTime.now();
+      title = '新对话 ${_fmt(ts)}';
+    }
+    if (title.length > 20) title = title.substring(0, 20);
+    return ChatSession(title: title, messages: List<Message>.from(items));
+  }
+
+  Future<void> openSession(int index) async {
+    if (index < 0 || index >= sessions.length) return;
+    messages
+      ..clear()
+      ..addAll(sessions[index].messages);
     update();
+    await Future.microtask(() {});
+    scrollToEnd();
+  }
+
+  // 新聊天：清空当前消息并创建一个空会话占位
+  Future<void> newChat() async {
+    final placeholder = ChatSession(title: '新对话 ${_fmt(DateTime.now())}', messages: []);
+    sessions.add(placeholder);
+    await openSession(sessions.length - 1);
+  }
+
+  String _firstSentence(String s) {
+    if (s.isEmpty) return s;
+    final idx = s.indexOf(RegExp(r'[。！？.!?]'));
+    return idx > 0 ? s.substring(0, idx) : s;
+  }
+
+  String _fmt(DateTime t) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
   }
 
   void onSendMessage() async {
@@ -322,4 +338,10 @@ class Message {
     required this.role,
     required this.timestamp,
   });
+}
+
+class ChatSession {
+  final String title;
+  final List<Message> messages;
+  ChatSession({required this.title, required this.messages});
 }

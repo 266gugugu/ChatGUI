@@ -9,7 +9,7 @@ import 'package:get/get.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class ChatDrawer extends GetView<ChatScreenController> {
-  const ChatDrawer({super.key});
+  ChatDrawer({super.key});
   
   // 历史记录展开状态
   final RxBool _isHistoryExpanded = true.obs;
@@ -173,8 +173,7 @@ class ChatDrawer extends GetView<ChatScreenController> {
                             LucideIcons.squarePen,
                             color: colorScheme.onSurface.withAlpha(200),
                           ),
-                          onTap: () {
-                          },
+                          onTap: () => controller.newChat(),
                           minTileHeight: 48,
                         ),
                         ListTile(
@@ -227,13 +226,14 @@ class ChatDrawer extends GetView<ChatScreenController> {
                         Obx(() => Column(
                           children: [
                             if (_isHistoryExpanded.value)
-                              for (var i = 0; i < 10; i++) // 限制显示最近10条记录
+                              for (var i = 0; i < controller.sessions.length; i++)
                                 ListTile(
                                   title: Text(
-                                    'History Title $i',
+                                    controller.sessions[i].title,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: colorScheme.onSurface),
                                   ),
-                                  onTap: () {},
+                                  onTap: () => controller.openSession(i),
                                   minTileHeight: 48,
                                 ),
                           ],

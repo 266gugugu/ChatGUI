@@ -22,7 +22,7 @@ dependencies:
   extended_image: ^10.0.1
   chinese_font_library: ^1.2.0
   http: ^1.2.1
-  file_picker: ^6.1.1
+  file_picker: ^10.3.3
   stream_transform: ^2.1.0
   scroll_to_index: ^3.0.1
   md_single_block_renderer:

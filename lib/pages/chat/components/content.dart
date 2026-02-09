@@ -1,4 +1,5 @@
-import 'package:chat_gui/pages/chat/controller.dart';
+import 'package:chat_gui/pages/chat/chat_controller.dart';
+import 'package:chat_gui/pages/chat/components/message_bubble.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -130,9 +131,6 @@ class ChatContent extends GetView<ChatScreenController> {
                     }
                     
                     final message = controller.messages[index];
-                    final isUser = message.role == 'user';
-                    print('渲染消息 $index: 角色=$isUser, 内容="${message.text}"');
-                    final displayText = _sanitizeText(message.text);
                     
                     return AutoScrollTag(
                       key: ValueKey(index),
@@ -149,58 +147,10 @@ class ChatContent extends GetView<ChatScreenController> {
                             child: FadeTransition(opacity: anim, child: child),
                           );
                         },
-                        child: Align(
-                        alignment: isUser ? Alignment.topRight : Alignment.topLeft,
-                        child: ConstrainedBox(
-                          constraints:
-                              tabletWidth > 0
-                                  ? BoxConstraints(maxWidth: tabletWidth.toDouble() * 0.75)
-                                  : BoxConstraints(maxWidth: 500),
-                          child: Container(
-                            margin: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: isUser ? Colors.blue : Colors.white,
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
-                                bottomLeft: isUser ? Radius.circular(16) : Radius.circular(4),
-                                bottomRight: isUser ? Radius.circular(4) : Radius.circular(16),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                              children: [
-                                SelectableText.rich(
-                                  _buildRichSpan(
-                                    displayText,
-                                    TextStyle(
-                                      color: isUser ? Colors.white : colorScheme.onSurface,
-                                      fontSize: 16,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  _formatTime(message.timestamp),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isUser ? Colors.white.withOpacity(0.7) : colorScheme.onSurface.withOpacity(0.7),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        child: MessageBubble(
+                          message: message,
+                          tabletWidth: tabletWidth,
                         ),
-                      ),
                       ),
                     );
                   },
@@ -211,114 +161,6 @@ class ChatContent extends GetView<ChatScreenController> {
           ),
         ),
       ),
-    );
-  }
-  
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-    
-    if (difference.inMinutes < 1) {
-      return '刚刚';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}分钟前';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}小时前';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}天前';
-    } else {
-      return '${time.year}-${time.month.toString().padLeft(2, '0')}-${time.day.toString().padLeft(2, '0')}';
-    }
-  }
-}
-
-// 将 markdown 风格的列表星号、加粗星号去除/替换为更友好的展示
-String _sanitizeText(String raw) {
-  if (raw.isEmpty) return raw;
-  final lines = raw.split('\n');
-  final bullet = RegExp(r'^\s*[\*\-]\s+');
-  final cleaned = lines.map((l) {
-    var s = l;
-    if (bullet.hasMatch(s)) {
-      s = s.replaceFirst(bullet, '• ');
-    }
-    return s;
-  }).join('\n');
-  return cleaned;
-}
-
-// 将 **文本** 渲染为加粗，支持多段；不跨行匹配
-TextSpan _buildRichSpan(String text, TextStyle baseStyle) {
-  final spans = <TextSpan>[];
-  final reg = RegExp(r'\*\*(.+?)\*\*');
-  int index = 0;
-  for (final m in reg.allMatches(text)) {
-    if (m.start > index) {
-      spans.add(TextSpan(text: text.substring(index, m.start), style: baseStyle));
-    }
-    final boldText = m.group(1) ?? '';
-    spans.add(TextSpan(text: boldText, style: baseStyle.copyWith(fontWeight: FontWeight.w600)));
-    index = m.end;
-  }
-  if (index < text.length) {
-    spans.add(TextSpan(text: text.substring(index), style: baseStyle));
-  }
-  return TextSpan(children: spans, style: baseStyle);
-}
-
-class ChatContentUserBubble extends GetView<ChatScreenController> {
-  const ChatContentUserBubble(this.constraints, {super.key});
-
-  final BoxConstraints constraints;
-
-  @override
-  Widget build(BuildContext context) {
-    return SelectionArea(
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: EdgeInsets.symmetric(horizontal: 12),
-          padding: EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.75),
-          decoration: BoxDecoration(
-            color: C.g1.r,
-            borderRadius: BorderRadius.circular(22),
-          ),
-          child: Text(
-            "User Message",
-            style: TextStyle(color: C.black.r, fontSize: 16, height: 1.5),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class ChatContentAssistantBubble extends GetView<ChatScreenController> {
-  const ChatContentAssistantBubble(this.constraints, this.text, {super.key});
-
-  final BoxConstraints constraints;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    print("Building Assistant Bubble");
-    return SelectionArea(
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 12),
-        // child: MarkdownRenderer(text),
-      ),
-    );
-  }
-}
-
-class ChatContentActionButtons extends GetView<ChatScreenController> {
-  const ChatContentActionButtons({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface),
     );
   }
 }

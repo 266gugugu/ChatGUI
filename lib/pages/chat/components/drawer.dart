@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:chat_gui/pages/chat/controller.dart';
+import 'package:chat_gui/pages/chat/chat_controller.dart';
 import 'package:chat_gui/store/app_store.dart';
 import 'package:chat_gui/utils/api_service.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
@@ -52,7 +52,7 @@ class ChatDrawer extends GetView<ChatScreenController> {
               Column(
                 children: [
                   Container(
-                    color: C.white.r,
+                    color: colorScheme.surface,
                     padding: const EdgeInsets.only(left: 16, right: 16, bottom: 8, top: 8),
                     child: Row(
                       children: [
@@ -194,8 +194,8 @@ class ChatDrawer extends GetView<ChatScreenController> {
                           ],
                         )),
                         ListTile(
-                          title: Text('清空聊天历史', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
-                          leading: Icon(LucideIcons.trash2, color: Colors.red),
+                          title: Text('清空聊天历史', style: TextStyle(color: colorScheme.onError, fontWeight: FontWeight.w800)),
+                          leading: Icon(LucideIcons.trash2, color: colorScheme.onError),
                           onTap: () => _showClearHistoryDialog(context),
                           minTileHeight: 48,
                         ),
@@ -233,9 +233,9 @@ class ChatDrawer extends GetView<ChatScreenController> {
                           height: 34,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(25),
-                            color: Colors.purple,
+                            color: colorScheme.primary,
                           ),
-                          child: Icon(Icons.person, color: Colors.white),
+                          child: Icon(Icons.person, color: colorScheme.onPrimary),
                         ),
                         onTap: () {},
                       ),
@@ -267,7 +267,7 @@ class ChatDrawer extends GetView<ChatScreenController> {
             onPressed: () => Navigator.of(ctx).pop(),
           ),
           TextButton(
-            child: Text('清空', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            child: Text('清空', style: TextStyle(color: colorScheme.onError, fontWeight: FontWeight.bold)),
             onPressed: () async {
               Navigator.of(ctx).pop();
               final ok = await apiService.clearChatHistory();
@@ -493,7 +493,7 @@ class _ApiSettingsPanelState extends State<ApiSettingsPanel> {
     return Container(
       width: 320,
       constraints: BoxConstraints(maxWidth:360),
-      color: colorScheme.surface,
+      color: Colors.white,
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,7 +530,7 @@ class _ApiSettingsPanelState extends State<ApiSettingsPanel> {
                 constraints: BoxConstraints(),
               ),
               IconButton(
-                icon: Icon(Icons.delete_outline, color: profiles.length>1 ? Colors.red : Colors.grey),
+                icon: Icon(Icons.delete_outline, color: profiles.length>1 ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.outline),
                 tooltip: '删除',
                 onPressed: profiles.length > 1 ? _removeCurrentProfile : null,
                 visualDensity: VisualDensity.compact,
@@ -556,48 +556,56 @@ class _ApiSettingsPanelState extends State<ApiSettingsPanel> {
           const SizedBox(height:10),
           TextField(
             controller:nameCtrl,
-            decoration:InputDecoration(labelText:'配置名 (备注)',filled:true,fillColor:colorScheme.surfaceVariant.withAlpha(40)),
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            decoration:InputDecoration(
+              labelText:'配置名 (备注)',
+              labelStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              hintStyle: TextStyle(color: Colors.black54),
+              filled:true,
+              fillColor: Colors.white,
+            ),
             onChanged:(_){ _onFieldChanged(); },
           ),
           const SizedBox(height:8),
           DropdownButton<String>(
             borderRadius: BorderRadius.circular(10),
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
             value: type,
             onChanged:(s){ if(s!=null){setState(()=>type=s);_onFieldChanged();} },
-            items:supportedTypes.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),
+            items:supportedTypes.map((e)=>DropdownMenuItem(value:e,child:Text(e, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)))).toList(),
           ),
           const SizedBox(height:10),
           Builder(builder: (_) {
             switch(type){
               case 'OpenAI':
                 return Column(children:[
-                  TextField(controller:ctls['url'],decoration:InputDecoration(labelText:'API地址(必填)',hintText:'https://api.openai.com/v1/'),onChanged:(_)=>_onFieldChanged()),
+                  TextField(controller:ctls['url'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API地址(必填)',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintText:'https://api.openai.com/v1/',hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged()),
                   SizedBox(height:6),
-                  TextField(controller:ctls['key'],decoration:InputDecoration(labelText:'API Key',hintText:'sk-...'),onChanged:(_)=>_onFieldChanged(),obscureText:true),
+                  TextField(controller:ctls['key'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API Key',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintText:'sk-...',hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged(),obscureText:true),
                   SizedBox(height:6),
-                  TextField(controller:ctls['org'],decoration:InputDecoration(labelText:'组织ID(可选)',hintText:'org-...'),onChanged:(_)=>_onFieldChanged()),
+                  TextField(controller:ctls['org'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'组织ID(可选)',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintText:'org-...',hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged()),
                 ]);
               case 'Gemini':
                 return Column(children:[
-                  TextField(controller:ctls['key'],decoration:InputDecoration(labelText:'API Key'),onChanged:(_)=>_onFieldChanged(),obscureText:true),
+                  TextField(controller:ctls['key'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API Key',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged(),obscureText:true),
                   SizedBox(height:6),
-                  TextField(controller:ctls['region'],decoration:InputDecoration(labelText:'区域',hintText:'us-central1'),onChanged:(_)=>_onFieldChanged()),
+                  TextField(controller:ctls['region'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'区域',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintText:'us-central1',hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged()),
                 ]);
               case 'DeepSeek':
                 return Column(children:[
-                  TextField(controller:ctls['url'],decoration:InputDecoration(labelText:'API地址'),onChanged:(_)=>_onFieldChanged()),
+                  TextField(controller:ctls['url'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API地址',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged()),
                   SizedBox(height:6),
-                  TextField(controller:ctls['key'],decoration:InputDecoration(labelText:'API Key'),onChanged:(_)=>_onFieldChanged(),obscureText:true),
+                  TextField(controller:ctls['key'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API Key',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged(),obscureText:true),
                 ]);
               case 'Kimi':
                 return Column(children:[
-                  TextField(controller:ctls['url'],decoration:InputDecoration(labelText:'API地址'),onChanged:(_)=>_onFieldChanged()),
+                  TextField(controller:ctls['url'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'API地址',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged()),
                   SizedBox(height:6),
-                  TextField(controller:ctls['token'],decoration:InputDecoration(labelText:'Token'),onChanged:(_)=>_onFieldChanged(),obscureText:true),
+                  TextField(controller:ctls['token'],style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'Token',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),hintStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged(),obscureText:true),
                 ]);
               case '自定义':
               default:
-                return TextField(controller:ctls['raw'],maxLines:6,decoration:InputDecoration(labelText:'自定义配置 (JSON)',helperText:'除非你懂格式原理，无需使用自定义'),onChanged:(_)=>_onFieldChanged());
+                return TextField(controller:ctls['raw'],maxLines:6,style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),decoration:InputDecoration(labelText:'自定义配置 (JSON)',labelStyle: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),helperText:'除非你懂格式原理，无需使用自定义',helperStyle: const TextStyle(color: Colors.black54),filled:true,fillColor: Colors.white),onChanged:(_)=>_onFieldChanged());
             }
           }),
           // 保存按钮单独一行

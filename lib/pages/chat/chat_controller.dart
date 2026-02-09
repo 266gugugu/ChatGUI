@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:chat_gui/components/interactive_drawer.dart';
+import 'package:chat_gui/models/chat_message.dart';
+import 'package:chat_gui/services/chat_service.dart';
+import 'package:chat_gui/services/i_chat_service.dart';
 import 'package:chat_gui/store/app_store.dart';
 import 'package:chat_gui/utils/api_service.dart';
+import 'package:chat_gui/utils/date_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:md_single_block_renderer/md_single_block_renderer.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
 
 class ChatScreenController extends GetxController with WidgetsBindingObserver {
@@ -21,36 +24,32 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
   final InteractiveDrawerController drawerController;
   double scrollOffsetPercent = -1;
 
-  final testMdBlocks = <Block>[].obs;
-  final testMdBlocksLen = 0.obs;
-
-  final testStreamMd = ''.obs;
+  // UI 状态
   final isTyping = false.obs;
   final messageInputHeight = 100.0.obs;
   final isDrawerOpen = false.obs;
-  final List<Message> messages = [];
-  final RxList<ChatSession> sessions = <ChatSession>[].obs; // 按时间自动分组的历史会话
+  // 当前使用的模型名称，后续可从 API 获取
+  final currentModel = 'Gemini-2.5-pro-max-ultra'.obs;
+  
+  // Use new models
+  final List<ChatMessage> messages = [];
+  final RxList<ChatSession> sessions = <ChatSession>[].obs;
+  
   final double kChatInputMaxHeight = 200.0;
-  final ApiService apiService = Get.find<ApiService>();
+  
+  // Service layer - support dependency injection
+  final IChatService chatService;
 
-  ChatScreenController() : drawerController = InteractiveDrawerController(
-    initialValue: Get.find<AppStore>().tabletMode.value ? 1.0 : 0.0,
-  );
+  ChatScreenController({IChatService? service})
+      : chatService = service ?? Get.find<ChatService>(),
+        drawerController = InteractiveDrawerController(
+          initialValue: Get.find<AppStore>().tabletMode.value ? 1.0 : 0.0,
+        );
 
   @override
   void onInit() {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
-
-    // print(DateTime.now());
-    // markdownToBlocksAsync(testMd).then((List<Block> v) {
-    //   testMdBlocks.value = List<List<Block>>.generate(100, (_) => v).expand((e) => e).toList();
-    //   print(DateTime.now());
-    // });
-
-    ever(testMdBlocks, (val) {
-      testMdBlocksLen.value = testMdBlocks.length;
-    });
 
     ever(Get.find<AppStore>().tabletMode, (isTablet) {
       if (drawerController.isOpen && !isTablet) {
@@ -104,56 +103,11 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
 
   Future<void> refreshSessions() async {
     try {
-      final raw = await apiService.getChatHistory();
-      final all = raw
-          .map((e) => Message(
-                text: (e['content'] ?? '').toString(),
-                role: (e['role'] ?? 'assistant').toString(),
-                timestamp: DateTime.tryParse((e['timestamp'] ?? '').toString()) ?? DateTime.now(),
-              ))
-          .toList();
-
-      // 根据时间间隔分段（>30分钟算新会话）
-      const gap = Duration(minutes: 30);
-      final List<ChatSession> grouped = [];
-      List<Message> current = [];
-      for (final m in all) {
-        if (current.isEmpty) {
-          current = [m];
-        } else {
-          final last = current.last;
-          if (m.timestamp.difference(last.timestamp).abs() > gap) {
-            grouped.add(_sessionFrom(current));
-            current = [m];
-          } else {
-            current.add(m);
-          }
-        }
-      }
-      if (current.isNotEmpty) grouped.add(_sessionFrom(current));
-
-      sessions.assignAll(grouped);
+      final history = await chatService.getChatHistory();
+      sessions.assignAll(history);
     } catch (e) {
-      print('加载历史失败: $e');
+      // 失败时显示空列表
     }
-  }
-
-  ChatSession _sessionFrom(List<Message> items) {
-    // 标题：优先第一条用户消息的首句；否则第一条消息；都没有则“新对话 + 日期”
-    String title = '';
-    for (final m in items) {
-      if (m.role == 'user' && m.text.trim().isNotEmpty) {
-        title = _firstSentence(m.text.trim());
-        break;
-      }
-    }
-    if (title.isEmpty && items.isNotEmpty) title = _firstSentence(items.first.text.trim());
-    if (title.isEmpty) {
-      final ts = items.isNotEmpty ? items.first.timestamp : DateTime.now();
-      title = '新对话 ${_fmt(ts)}';
-    }
-    if (title.length > 20) title = title.substring(0, 20);
-    return ChatSession(title: title, messages: List<Message>.from(items));
   }
 
   Future<void> openSession(int index) async {
@@ -168,32 +122,60 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
 
   // 新聊天：清空当前消息并创建一个空会话占位
   Future<void> newChat() async {
-    final placeholder = ChatSession(title: '新对话 ${_fmt(DateTime.now())}', messages: []);
+    // Use service layer for validation
+    final ok = await chatService.validateApiConnection();
+    if (!ok) {
+      final ctx = Get.context!;
+      final colorScheme = Theme.of(ctx).colorScheme;
+      await showDialog(
+        context: ctx,
+        builder: (c) => AlertDialog(
+          backgroundColor: colorScheme.background,
+          title: const Text('API不可用', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: const Text('无法访问外部API（/models 返回非200）。请检查地址/密钥或网络。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(c).pop(),
+              child: Text('知道了', style: TextStyle(color: colorScheme.primary)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final placeholder = ChatSession(
+      title: '新对话 ${DateFormatter.formatDateTime(DateTime.now())}',
+      messages: [],
+    );
     sessions.add(placeholder);
     await openSession(sessions.length - 1);
   }
 
-  String _firstSentence(String s) {
-    if (s.isEmpty) return s;
-    final idx = s.indexOf(RegExp(r'[。！？.!?]'));
-    return idx > 0 ? s.substring(0, idx) : s;
-  }
 
-  String _fmt(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}';
-  }
 
   void onSendMessage() async {
     final text = inputController.text.trim();
     if (text.isEmpty) return;
+    
+    // 防止并发发送
+    if (isTyping.value) return;
+    
+    // 若是首次使用（无任何会话），则先创建一个新会话
+    final bool isFirstEverMessage = sessions.isEmpty;
+    if (isFirstEverMessage) {
+      sessions.add(ChatSession(
+        title: '新对话 ${DateFormatter.formatDateTime(DateTime.now())}',
+        messages: [],
+      ));
+    }
 
     // 1. 先清除输入框并保存消息内容
     final userMessageText = text;
     inputController.clear();
     
     // 2. 创建并添加用户消息
-    final userMessage = Message(
+    final userMessage = ChatMessage(
       text: userMessageText,
       role: 'user',
       timestamp: DateTime.now(),
@@ -209,32 +191,13 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
     // 5. 短暂延迟，确保UI完全更新后再继续
     await Future.microtask(() {});
 
-    // 6. 检查API配置是否完整
-    print('当前API配置 - URL: ${apiService.apiUrl.value}, Key长度: ${apiService.apiKey.value.length}, UserId: ${apiService.userId.value}');
-    if (apiService.apiUrl.value.isEmpty || apiService.apiKey.value.isEmpty) {
-      // 显示提示消息
-      messages.add(Message(
-        text: '请先在侧边栏设置中配置API地址和Key。',
-        role: 'assistant',
-        timestamp: DateTime.now(),
-      ));
-      print('添加API配置提示消息');
-      update();
-      await scrollToEnd();
-      return;
-    } else {
-      // 配置存在，立即重新加载以确保获取最新配置
-      await apiService.loadConfig();
-      print('重新加载后的API配置 - URL: ${apiService.apiUrl.value}, Key长度: ${apiService.apiKey.value.length}');
-    }
-
-    // 7. 设置为正在输入
+    // 6. 设置为正在输入
     isTyping.value = true;
     update();
     
     try {
-      // 8. 创建AI回复消息对象
-      final aiMessage = Message(
+      // 7. 创建AI回复消息对象
+      final aiMessage = ChatMessage(
         text: '',
         role: 'assistant',
         timestamp: DateTime.now(),
@@ -242,13 +205,14 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
       messages.add(aiMessage);
       update();
       
-      // 9. 发送消息到API服务
+      // 8. 使用服务层发送消息（传递上下文设置）
       try {
-        final stream = apiService.sendMessageStream(userMessageText);
+        // 从 ApiService 获取上下文设置
+        final withContext = Get.find<ApiService>().useContext.value;
+        final stream = chatService.sendMessage(userMessageText, withContext: withContext);
         await for (final chunk in stream) {
           // 更新AI回复内容
           aiMessage.text += chunk;
-          print('收到AI响应块: $chunk');
           update();
           
           // 滚动到底部
@@ -256,9 +220,8 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
         }
       } catch (error) {
         aiMessage.text = '发送失败: $error';
-          print('API错误: $error');
-          update();
-          scrollToEnd();
+        update();
+        scrollToEnd();
       } finally {
         isTyping.value = false;
         update();
@@ -266,26 +229,25 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
         // 消息处理完成后重新聚焦到输入框
         WidgetsBinding.instance.addPostFrameCallback((_) {
           FocusScope.of(Get.context!).requestFocus(FocusNode());
-          Timer(Duration(milliseconds: 100), () {
+          Timer(const Duration(milliseconds: 100), () {
             FocusScope.of(Get.context!).requestFocus(inputFocusNode);
           });
         });
       }
     } catch (e) {
       isTyping.value = false;
-      messages.add(Message(
+      messages.add(ChatMessage(
         text: '请求出错: ${e.toString()}',
         role: 'assistant',
         timestamp: DateTime.now(),
       ));
-      print('请求出错: $e');
       update();
       scrollToEnd();
       
       // 消息处理完成后重新聚焦到输入框
       WidgetsBinding.instance.addPostFrameCallback((_) {
         FocusScope.of(Get.context!).requestFocus(FocusNode());
-        Timer(Duration(milliseconds: 100), () {
+        Timer(const Duration(milliseconds: 100), () {
           FocusScope.of(Get.context!).requestFocus(inputFocusNode);
         });
       });
@@ -326,22 +288,4 @@ class ChatScreenController extends GetxController with WidgetsBindingObserver {
     searchInputController.dispose();
     inputFocusNode.dispose();
   }
-}
-
-class Message {
-  String text;
-  final String role;
-  final DateTime timestamp;
-
-  Message({
-    required this.text,
-    required this.role,
-    required this.timestamp,
-  });
-}
-
-class ChatSession {
-  final String title;
-  final List<Message> messages;
-  ChatSession({required this.title, required this.messages});
 }

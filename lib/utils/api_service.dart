@@ -237,6 +237,29 @@ class ApiService extends GetxService {
     }
   }
 
+  /// 校验外部API可用性：对 {apiUrl}/models 发起带鉴权的GET，期望200
+  Future<bool> validateExternalApi() async {
+    final String url = apiUrl.value.trim();
+    final String key = apiKey.value.trim();
+    if (url.isEmpty || key.isEmpty) return false;
+    try {
+      String base = url;
+      if (!base.endsWith('/')) base = '$base/';
+      final Uri uri = Uri.parse('${base}models');
+      final response = await _retryRequest(() => _httpClient.get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $key',
+              'Content-Type': 'application/json',
+            },
+          ));
+      return response != null && response.statusCode == 200;
+    } catch (e) {
+      print('validateExternalApi 失败: $e');
+      return false;
+    }
+  }
+
   // 清除聊天历史
   Future<bool> clearChatHistory() async {
     try {

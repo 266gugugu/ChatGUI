@@ -1,4 +1,4 @@
-import 'package:chat_gui/pages/chat/controller.dart';
+import 'package:chat_gui/pages/chat/chat_controller.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

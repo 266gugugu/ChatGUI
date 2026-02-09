@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'routes/app_pages.dart';
+import 'services/chat_service.dart';
 import 'store/app_store.dart';
 
 Future<void> main() async {
@@ -35,6 +36,9 @@ Future<void> main() async {
   await TranslationService.init();
   final store = await Get.putAsync<AppStore>(() async => AppStore().init());
   Get.put(ApiService());
+  
+  // Register chat service (using real implementation)
+  Get.put<ChatService>(ChatService());
   
   // 运行应用
   runApp(MainApp(store: store));

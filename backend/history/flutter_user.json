@@ -1,0 +1,1 @@
+[{"role":"user","content":"这是来自Flutter应用的测试消息，包含各种Unicode字符：你好，世界！","timestamp":"2025-10-29T22:35:59.680997"},{"role":"assistant","content":"你好！这是一个直接返回的中文测试响应。你的消息是：这是来自Flutter应用的测试消息，包含各种Unicode字符：你好，世界！","timestamp":"2025-10-29T22:35:59.682998"}]

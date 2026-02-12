@@ -1,0 +1,13 @@
+name: chatgui_backend
+description: ChatGUI后端服务
+version: 1.0.0
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+# 只使用Dart核心库，不需要外部依赖
+dependencies:
+  mime: ^1.0.5
+
+# 可选：如果需要，添加dev_dependencies
+dev_dependencies:

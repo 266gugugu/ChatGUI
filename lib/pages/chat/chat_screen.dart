@@ -2,27 +2,13 @@ import 'package:chat_gui/components/interactive_drawer.dart';
 import 'package:chat_gui/pages/chat/components/content.dart';
 import 'package:chat_gui/pages/chat/components/drawer.dart';
 import 'package:chat_gui/pages/chat/components/input.dart';
-import 'package:chat_gui/pages/chat/controller.dart';
+import 'package:chat_gui/pages/chat/chat_controller.dart';
 import 'package:chat_gui/store/app_store.dart';
 import 'package:chat_gui/utils/cxxxr.dart';
+import 'package:chat_gui/utils/layout_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-
-List<Map<String, int>> tabletWidthTier = [
-  {'max': 890, 'width': -1},
-  {'max': 1280, 'width': 890 - 250},
-  {'max': 999999, 'width': 1030 - 250},
-];
-
-int calculateTabletWidth(int screenWidth) {
-  for (var tier in tabletWidthTier) {
-    if (screenWidth <= tier['max']!) {
-      return tier['width']!;
-    }
-  }
-  return tabletWidthTier.last['width']!;
-}
 
 class ChatScreen extends GetView<ChatScreenController> {
   const ChatScreen({super.key});
@@ -48,15 +34,15 @@ class ChatScreen extends GetView<ChatScreenController> {
             padding: const EdgeInsets.only(right: 10),
             child: TextButton.icon(
               onPressed: () {},
-              label: const Text(
-                'Gemini-2.5-pro-max-ultra',
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+              label: Obx(() => Text(
+                    controller.currentModel.value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  )),
               icon: Icon(LucideIcons.chevronDown),
               iconAlignment: IconAlignment.end,
               style: TextButton.styleFrom(

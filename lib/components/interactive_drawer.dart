@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'package:chat_gui/utils/cxxxr.dart';
 import 'package:flutter/material.dart';
 
 /// Drawer placement side.
@@ -252,10 +251,6 @@ class _InteractiveDrawerState extends State<InteractiveDrawer>
         onHorizontalDragStart: _onDragStart,
         onHorizontalDragUpdate: _onDragUpdate,
         onHorizontalDragEnd: _onDragEnd,
-        onTap:
-            widget.barrierDismissible && _controllerProxy.isOpen
-                ? _controllerProxy.close
-                : null,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -263,7 +258,11 @@ class _InteractiveDrawerState extends State<InteractiveDrawer>
             if (_anim.value > 0.0)
               IgnorePointer(
                 ignoring: !widget.barrierDismissible,
-                child: Container(color: widget.scrimColor.withOpacity(scrimOpacity)),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _controllerProxy.close,
+                  child: Container(color: widget.scrimColor.withOpacity(scrimOpacity)),
+                ),
               ),
           ],
         ),
@@ -326,7 +325,7 @@ class _InteractiveDrawerState extends State<InteractiveDrawer>
         child: SizedBox(
           width: _drawerWidth,
           child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
+            behavior: HitTestBehavior.deferToChild,
             onHorizontalDragStart: _onDragStart,
             onHorizontalDragUpdate: _onDragUpdate,
             onHorizontalDragEnd: _onDragEnd,
@@ -344,7 +343,7 @@ class _InteractiveDrawerState extends State<InteractiveDrawer>
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: C.white.r,
+      color: Theme.of(context).colorScheme.background,
       child: LayoutBuilder(
         builder: (context, constraints) {
           if (widget.tabletMode) {

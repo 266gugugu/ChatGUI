@@ -80,6 +80,12 @@ final ThemeData lightTheme = commonTheme.copyWith(
       foregroundColor: WidgetStatePropertyAll(C.g5.l),
     ),
   ),
+  menuTheme: MenuThemeData(
+    style: MenuStyle(
+      backgroundColor: WidgetStatePropertyAll(C.white.l),
+      surfaceTintColor: WidgetStatePropertyAll(C.white.l),
+    ),
+  ),
 );
 
 final ThemeData darkTheme = commonTheme.copyWith(
@@ -141,6 +147,12 @@ final ThemeData darkTheme = commonTheme.copyWith(
   textButtonTheme: TextButtonThemeData(
     style: (commonTheme.textButtonTheme.style ?? const ButtonStyle()).copyWith(
       foregroundColor: WidgetStatePropertyAll(C.g5.d),
+    ),
+  ),
+  menuTheme: MenuThemeData(
+    style: MenuStyle(
+      backgroundColor: WidgetStatePropertyAll(C.white.d),
+      surfaceTintColor: WidgetStatePropertyAll(C.white.d),
     ),
   ),
 );
